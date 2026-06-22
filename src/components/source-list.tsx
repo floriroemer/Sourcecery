@@ -46,7 +46,6 @@ export function SourceList({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = useCallback(
@@ -109,19 +108,9 @@ export function SourceList({
     }
   };
 
-  const handleDownload = async (source: Source) => {
-    setDownloadingId(source.id);
-    try {
-      const res = await fetch(`/api/download?url=${encodeURIComponent(source.blobUrl)}`);
-      const data = await res.json();
-      if (data.url) {
-        window.open(data.url, "_blank");
-      }
-    } catch {
-      setError("Failed to download file");
-    } finally {
-      setDownloadingId(null);
-    }
+  const handleDownload = (source: Source) => {
+    // The download route streams the file directly, so we just open it
+    window.open(`/api/download?url=${encodeURIComponent(source.blobUrl)}`, "_blank");
   };
 
   return (
@@ -215,15 +204,10 @@ export function SourceList({
                 )}
                 <button
                   onClick={() => handleDownload(source)}
-                  disabled={downloadingId === source.id}
                   className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-brand-600 group-hover:opacity-100"
                   title="Download"
                 >
-                  {downloadingId === source.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Download className="h-3.5 w-3.5" />
-                  )}
+                  <Download className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={() => handleDelete(source.id)}

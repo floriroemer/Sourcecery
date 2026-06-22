@@ -1,4 +1,4 @@
-import { put, getDownloadUrl } from "@vercel/blob";
+import { put, get } from "@vercel/blob";
 
 /**
  * Upload a file to Vercel Blob storage (private store).
@@ -19,11 +19,15 @@ export async function uploadToBlob(
 }
 
 /**
- * Generate a signed download URL for a private blob.
- * Expires after the given number of seconds (default 1 hour).
+ * Fetch a private blob and stream it to the client.
+ * Returns the blob stream, content type, and other metadata.
  */
-export async function getSignedUrl(blobUrl: string, expiresInSeconds = 3600) {
-  return getDownloadUrl(blobUrl, {
-    expiresInSeconds,
-  });
+export async function fetchPrivateBlob(blobUrl: string) {
+  const result = await get(blobUrl, { access: "private" });
+
+  if (!result || result.statusCode !== 200) {
+    return null;
+  }
+
+  return result;
 }
