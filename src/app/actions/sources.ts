@@ -29,4 +29,5 @@ export async function deleteSource(sourceId: string, notebookId: string) {
   await db.delete(sources).where(eq(sources.id, sourceId));
 
   revalidatePath(`/notebooks/${notebookId}`);
+  revalidatePath("/dashboard");
 }

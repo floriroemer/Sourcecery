@@ -54,6 +54,7 @@ export default async function DashboardPage() {
               id={notebook.id}
               title={notebook.title}
               description={notebook.description}
+              sourceCount={notebook.sourceCount}
               updatedAt={formatDate(notebook.updatedAt)}
             />
           ))}

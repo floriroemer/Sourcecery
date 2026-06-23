@@ -75,6 +75,55 @@ export default function Home() {
         </div>
       </section>
 
+      {/* How it works — Sources to Notebook */}
+      <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="grid items-center gap-12 lg:grid-cols-2">
+          <div>
+            <Badge variant="secondary" className="mb-4 gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" />
+              How it works
+            </Badge>
+            <h2 className="text-3xl font-bold tracking-tight">
+              From scattered sources to a unified notebook
+            </h2>
+            <p className="mt-4 text-muted-foreground">
+              Upload your PDFs, documents, videos, and audio files. Sourcecery
+              organizes everything into a single notebook you can chat with —
+              every answer grounded in the sources you provided.
+            </p>
+            <ul className="mt-6 space-y-3">
+              <li className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">1</span>
+                <span className="text-sm text-muted-foreground">
+                  <strong className="text-foreground">Upload your sources</strong> — PDFs, Word docs, PowerPoints, videos, audio, Markdown, or plain text.
+                </span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">2</span>
+                <span className="text-sm text-muted-foreground">
+                  <strong className="text-foreground">Sourcecery processes</strong> — your files are parsed, indexed, and made searchable.
+                </span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">3</span>
+                <span className="text-sm text-muted-foreground">
+                  <strong className="text-foreground">Chat & explore</strong> — ask questions, get cited answers, and generate audio overviews.
+                </span>
+              </li>
+            </ul>
+          </div>
+          <div className="relative">
+            <div className="absolute -inset-4 rounded-2xl bg-brand-100/50 blur-xl" aria-hidden />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/Sources-to-Notebook.png"
+              alt="Sources flowing into a Sourcecery notebook"
+              className="relative rounded-xl border border-border shadow-lg"
+            />
+          </div>
+        </div>
+      </section>
+
       {/* Features */}
       <section className="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
         <h2 className="text-center text-3xl font-bold tracking-tight">

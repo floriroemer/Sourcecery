@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, count } from "drizzle-orm";
 import { db } from "@/db";
 import { notebooks, sources } from "@/db/schema";
 import { getCurrentUserId } from "@/lib/auth";
@@ -38,11 +38,23 @@ export async function getNotebooks() {
   const userId = await getCurrentUserId();
   if (!userId) return [];
 
-  return db
-    .select()
+  const result = await db
+    .select({
+      id: notebooks.id,
+      userId: notebooks.userId,
+      title: notebooks.title,
+      description: notebooks.description,
+      createdAt: notebooks.createdAt,
+      updatedAt: notebooks.updatedAt,
+      sourceCount: count(sources.id),
+    })
     .from(notebooks)
+    .leftJoin(sources, eq(sources.notebookId, notebooks.id))
     .where(eq(notebooks.userId, userId))
+    .groupBy(notebooks.id)
     .orderBy(desc(notebooks.updatedAt));
+
+  return result;
 }
 
 export async function getNotebook(id: string) {

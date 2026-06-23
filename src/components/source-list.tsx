@@ -14,6 +14,7 @@ import {
   Loader2,
   Download,
   CheckCircle2,
+  Eye,
 } from "lucide-react";
 import type { Source } from "@/db/schema";
 import { deleteSource } from "@/app/actions/sources";
@@ -108,9 +109,14 @@ export function SourceList({
     }
   };
 
-  const handleDownload = (source: Source) => {
-    // The download route streams the file directly, so we just open it
+  const handlePreview = (source: Source) => {
+    // Open the file in a new tab for preview (PDFs render in-browser, others download)
     window.open(`/api/download?url=${encodeURIComponent(source.blobUrl)}`, "_blank");
+  };
+
+  const handleDownload = (source: Source) => {
+    // Trigger a download rather than in-browser preview
+    window.open(`/api/download?url=${encodeURIComponent(source.blobUrl)}&download=1`, "_blank");
   };
 
   return (
@@ -202,6 +208,13 @@ export function SourceList({
                     Error
                   </Badge>
                 )}
+                <button
+                  onClick={() => handlePreview(source)}
+                  className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-brand-600 group-hover:opacity-100"
+                  title="Preview"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                </button>
                 <button
                   onClick={() => handleDownload(source)}
                   className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-brand-600 group-hover:opacity-100"

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { sources, notebooks } from "@/db/schema";
 import { getCurrentUserId } from "@/lib/auth";
@@ -81,6 +82,9 @@ export async function POST(req: NextRequest) {
         status: "ready",
       })
       .returning();
+
+    // Revalidate dashboard so source count updates
+    revalidatePath("/dashboard");
 
     return NextResponse.json({ source }, { status: 201 });
   } catch (error) {
