@@ -1,18 +1,11 @@
-import { streamText, stepCountIs, tool, convertToModelMessages } from "ai";
+import { streamText, stepCountIs, convertToModelMessages } from "ai";
 import { gateway } from "@ai-sdk/gateway";
-import { z } from "zod";
 import { db } from "@/db";
-import { chatMessages, notebooks } from "@/db/schema";
+import { chatMessages, notebooks, users } from "@/db/schema";
 import { getCurrentUserId } from "@/lib/auth";
 import { eq, and } from "drizzle-orm";
-
-// Available models via Vercel AI Gateway
-const AVAILABLE_MODELS = [
-  "openai/gpt-5-nano",
-  "meta/llama-3.1-8b",
-] as const;
-
-type ModelId = (typeof AVAILABLE_MODELS)[number];
+import { DEFAULT_ENABLED_MODELS } from "@/lib/models";
+import { createChatTools } from "@/lib/ai-tools";
 
 export async function POST(req: Request) {
   const userId = await getCurrentUserId();
@@ -33,10 +26,21 @@ export async function POST(req: Request) {
     );
   }
 
-  // Validate model
-  const model: ModelId = AVAILABLE_MODELS.includes(requestedModel)
+  // Fetch the user's enabled models
+  const [user] = await db
+    .select({ enabledModels: users.enabledModels })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  const enabledModels = user?.enabledModels?.length
+    ? user.enabledModels
+    : DEFAULT_ENABLED_MODELS;
+
+  // Validate model is in the user's enabled list
+  const model = enabledModels.includes(requestedModel)
     ? requestedModel
-    : "openai/gpt-5-nano";
+    : enabledModels[0];
 
   // Verify notebook ownership
   const [notebook] = await db
@@ -74,19 +78,33 @@ export async function POST(req: Request) {
     }
   }
 
-  const systemPrompt = `You are Sourcecery, a helpful AI research assistant. You help users understand your uploaded sources.
-For now, you don't have access to the user's uploaded documents (RAG integration coming soon).
-Be honest about this limitation — let the user know you can't see their files yet, but still help with general questions.
+  const systemPrompt = `You are Sourcecery, a helpful AI research assistant. You help users understand their uploaded sources.
 
-You have access to tools. Use them when appropriate. You can think step by step and call tools in a loop until you have a complete answer.
-Be concise, clear, and cite specific details when possible.
+You have access to tools that let you read the user's uploaded documents, save summaries, and take notes.
 
-You have a fun tool called "showThinkingGif" that displays a funny thinking GIF to the user for 3 seconds.
-Call this tool when you need to think about something or when the user asks a complex question — it gives the user a visual cue that you're working on it.
-You can call it at most once per response.`;
+## IMPORTANT: Tool Usage Strategy
+
+When a user asks about their sources, follow this order:
+1. **Call getNotes first** — check if you have saved notes from previous sessions
+2. **Call listSources** — see what files are in the notebook
+3. **Call getSummary for each relevant source** — check if a summary already exists
+4. **Only if no summary exists, call readSourceText** — read the full document
+5. **After reading a document, call saveSummary** — so you don't have to re-read it next time
+6. **Call saveNote** for any important findings you discover
+
+This strategy saves time and tokens — always check summaries and notes BEFORE reading full documents.
+
+You can think step by step and call tools in a loop until you have a complete answer.
+Be concise, clear, and cite specific details from the sources when possible.
+
+You also have a fun tool called "showThinkingGif" that displays a funny thinking GIF to the user.
+Call it when you're about to do complex work or read documents.`;
 
   // Convert UI messages to model messages for the AI
   const modelMessages = await convertToModelMessages(messages);
+
+  // Create tools with notebook + user context for security
+  const tools = createChatTools(notebookId, userId);
 
   // Stream the response using Vercel AI Gateway with an agentic tool loop
   const result = streamText({
@@ -94,26 +112,22 @@ You can call it at most once per response.`;
     system: systemPrompt,
     messages: modelMessages,
     stopWhen: stepCountIs(10), // Run up to 10 steps (agentic loop)
-    tools: {
-      showThinkingGif: tool({
-        description:
-          "Display a funny thinking GIF to the user for 3 seconds while you think. " +
-          "Call this when you need to ponder a question or want to give the user a visual cue that you're working on their request.",
-        inputSchema: z.object({}),
-        execute: async () => {
-          // Pick a random thinking GIF — the AI doesn't choose, we do
-          const gifs = ["thinking", "thinking1", "thinking2", "thinking3"];
-          const gif = gifs[Math.floor(Math.random() * gifs.length)];
-          return {
-            displayed: true,
-            gif,
-            durationMs: 3000,
-          };
-        },
-      }),
-    },
-    onError: (error) => {
-      console.error("[Chat] Stream error:", error);
+    tools,
+    onError: ({ error }) => {
+      const err = error as Error;
+      console.error("[Chat] Stream error:", err.message);
+
+      // Check for rate limit errors and log a helpful message
+      if (
+        err.message.includes("rate-limited") ||
+        err.message.includes("429") ||
+        err.message.includes("RateLimit")
+      ) {
+        console.error(
+          "[Chat] Rate limited by AI Gateway. Free tier limits exceeded. " +
+            "Upgrade at https://vercel.com to get unrestricted access."
+        );
+      }
     },
     onFinish: async ({ text }) => {
       // Save assistant response to DB after streaming completes

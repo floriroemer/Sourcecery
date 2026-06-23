@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getNotebookWithSources } from "@/app/actions/notebooks";
+import { getEnabledModels } from "@/app/actions/settings";
 import { SourceList } from "@/components/source-list";
 import { ChatPanel } from "@/components/chat-panel";
 import { NotesPanel } from "@/components/notes-panel";
@@ -20,6 +21,7 @@ export default async function NotebookPage({
   if (!data) notFound();
 
   const { notebook, sources } = data;
+  const enabledModels = await getEnabledModels();
 
   return (
     <div className="flex h-screen flex-col">
@@ -55,7 +57,7 @@ export default async function NotebookPage({
 
         {/* Center: Chat */}
         <div className="flex-1 overflow-hidden">
-          <ChatPanel notebookId={notebook.id} />
+          <ChatPanel notebookId={notebook.id} enabledModels={enabledModels} />
         </div>
 
         {/* Right: Notes / Audio */}

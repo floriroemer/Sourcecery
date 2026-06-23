@@ -6,14 +6,32 @@ import { DefaultChatTransport } from "ai";
 import { Send, MessageSquare, Sparkles, ChevronDown, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { getModelById } from "@/lib/models";
 
-const MODELS = [
-  { id: "openai/gpt-5-nano", label: "GPT-5 Nano", provider: "OpenAI" },
-  { id: "meta/llama-3.1-8b", label: "Llama 3.1 8B", provider: "Meta" },
-] as const;
+export function ChatPanel({
+  notebookId,
+  enabledModels,
+}: {
+  notebookId: string;
+  enabledModels: string[];
+}) {
+  // Build the model list from the user's enabled models
+  const models = useMemo(
+    () =>
+      enabledModels
+        .map((id) => {
+          const opt = getModelById(id);
+          return opt
+            ? { id: opt.id, label: opt.label, provider: opt.provider }
+            : null;
+        })
+        .filter((m): m is { id: string; label: string; provider: string } =>
+          m !== null
+        ),
+    [enabledModels]
+  );
 
-export function ChatPanel({ notebookId }: { notebookId: string }) {
-  const [model, setModel] = useState<string>(MODELS[0].id);
+  const [model, setModel] = useState<string>(models[0]?.id ?? "");
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -51,7 +69,7 @@ export function ChatPanel({ notebookId }: { notebookId: string }) {
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const selectedModel = MODELS.find((m) => m.id === model) ?? MODELS[0];
+  const selectedModel = models.find((m) => m.id === model) ?? models[0];
   const isLoading = status === "submitted" || status === "streaming";
 
   // Extract text content from message parts
@@ -88,7 +106,7 @@ export function ChatPanel({ notebookId }: { notebookId: string }) {
                 <div className="mb-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   AI Model
                 </div>
-                {MODELS.map((m) => (
+                {models.map((m) => (
                   <button
                     key={m.id}
                     onClick={() => {
@@ -233,8 +251,28 @@ export function ChatPanel({ notebookId }: { notebookId: string }) {
 
       {/* Error */}
       {error && (
-        <div className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-2 text-xs text-red-600">
-          {error.message}
+        <div className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-3 text-xs text-red-600">
+          {error.message.includes("rate-limited") ||
+          error.message.includes("429") ? (
+            <div>
+              <p className="font-semibold">⚠️ Rate limit reached</p>
+              <p className="mt-1">
+                The AI Gateway free tier limit was hit. Try again in a minute,
+                or upgrade your Vercel AI credits at{" "}
+                <a
+                  href="https://vercel.com/~/ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline font-medium"
+                >
+                  vercel.com/~/ai
+                </a>
+                .
+              </p>
+            </div>
+          ) : (
+            error.message
+          )}
         </div>
       )}
 

@@ -6,6 +6,7 @@ import {
   integer,
   vector,
   index,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -20,6 +21,8 @@ export const users = pgTable("users", {
   firstName: text("first_name"),
   lastName: text("last_name"),
   imageUrl: text("image_url"),
+  // Array of model IDs the user has enabled for chat (max 10)
+  enabledModels: jsonb("enabled_models").$type<string[]>().default([]).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -83,6 +86,81 @@ export const sources = pgTable(
 export const sourcesRelations = relations(sources, ({ one, many }) => ({
   notebook: one(notebooks, { fields: [sources.notebookId], references: [notebooks.id] }),
   embeddings: many(embeddings),
+  sourceText: one(sourceTexts, {
+    fields: [sources.id],
+    references: [sourceTexts.sourceId],
+  }),
+  summaries: many(summaries),
+}));
+
+/**
+ * Source texts — extracted text content from a source file.
+ * Populated when a PDF is parsed via RunPod/docling, or when a text file is uploaded.
+ * This lets the AI read document content without re-sending the whole file each time.
+ */
+export const sourceTexts = pgTable(
+  "source_texts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" })
+      .unique(),
+    content: text("content").notNull(),
+    pages: integer("pages"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    sourceIdx: index("source_texts_source_id_idx").on(t.sourceId),
+  })
+);
+
+/**
+ * Summaries — AI-generated summaries of individual sources.
+ * The AI saves these so it doesn't have to re-read the full document each time.
+ */
+export const summaries = pgTable(
+  "summaries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    sourceIdx: index("summaries_source_id_idx").on(t.sourceId),
+  })
+);
+
+export const summariesRelations = relations(summaries, ({ one }) => ({
+  source: one(sources, { fields: [summaries.sourceId], references: [sources.id] }),
+}));
+
+/**
+ * Notes — AI-saved notes about a notebook (key facts, findings, insights).
+ * These persist across chat sessions so the AI has context without re-reading everything.
+ */
+export const notes = pgTable(
+  "notes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    notebookId: uuid("notebook_id")
+      .notNull()
+      .references(() => notebooks.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    notebookIdx: index("notes_notebook_id_idx").on(t.notebookId),
+  })
+);
+
+export const notesRelations = relations(notes, ({ one }) => ({
+  notebook: one(notebooks, { fields: [notes.notebookId], references: [notebooks.id] }),
 }));
 
 /**
