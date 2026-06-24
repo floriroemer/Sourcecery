@@ -90,30 +90,38 @@ export function createChatTools(notebookId: string, userId: string, modelId: str
         "ALWAYS call this first to see what sources are available before reading any.",
       inputSchema: z.object({}),
       execute: async () => {
-        const result = await db
-          .select({
-            id: sources.id,
-            filename: sources.filename,
-            type: sources.type,
-            mimeType: sources.mimeType,
-            sizeBytes: sources.sizeBytes,
-            status: sources.status,
-          })
-          .from(sources)
-          .where(eq(sources.notebookId, notebookId))
-          .orderBy(sources.createdAt);
+        try {
+          const result = await db
+            .select({
+              id: sources.id,
+              filename: sources.filename,
+              type: sources.type,
+              mimeType: sources.mimeType,
+              sizeBytes: sources.sizeBytes,
+              status: sources.status,
+            })
+            .from(sources)
+            .where(eq(sources.notebookId, notebookId))
+            .orderBy(sources.createdAt);
 
-        return {
-          count: result.length,
-          sources: result.map((s) => ({
-            id: s.id,
-            filename: s.filename,
-            type: s.type,
-            mimeType: s.mimeType,
-            sizeKB: Math.round(s.sizeBytes / 1024),
-            status: s.status,
-          })),
-        };
+          return {
+            count: result.length,
+            sources: result.map((s) => ({
+              id: s.id,
+              filename: s.filename,
+              type: s.type,
+              mimeType: s.mimeType,
+              sizeKB: Math.round(s.sizeBytes / 1024),
+              status: s.status,
+            })),
+          };
+        } catch (err) {
+          return {
+            count: 0,
+            sources: [],
+            error: `listSources failed: ${(err as Error).message}`,
+          };
+        }
       },
     }),
 
@@ -132,48 +140,64 @@ export function createChatTools(notebookId: string, userId: string, modelId: str
         sourceId: z.string().uuid().describe("The ID of the source to read"),
       }),
       execute: async ({ sourceId }) => {
-        await verifySourceOwnership(sourceId, userId);
+        try {
+          await verifySourceOwnership(sourceId, userId);
 
-        // Check if text is already extracted
-        const [existing] = await db
-          .select()
-          .from(sourceTexts)
-          .where(eq(sourceTexts.sourceId, sourceId))
-          .limit(1);
+          // Check if text is already extracted
+          const [existing] = await db
+            .select()
+            .from(sourceTexts)
+            .where(eq(sourceTexts.sourceId, sourceId))
+            .limit(1);
 
-        if (existing) {
-          return {
-            sourceId,
-            text: existing.content,
-            pages: existing.pages,
-            cached: true,
-            length: existing.content.length,
-          };
-        }
+          if (existing) {
+            return {
+              sourceId,
+              text: existing.content,
+              pages: existing.pages,
+              cached: true,
+              length: existing.content.length,
+            };
+          }
 
-        // Text not extracted yet — need to fetch and parse
-        const [source] = await db
-          .select()
-          .from(sources)
-          .where(eq(sources.id, sourceId))
-          .limit(1);
+          // Text not extracted yet — need to fetch and parse
+          const [source] = await db
+            .select()
+            .from(sources)
+            .where(eq(sources.id, sourceId))
+            .limit(1);
 
-        if (!source) throw new Error("Source not found");
+          if (!source) throw new Error("Source not found");
 
-        // For text-based files, read directly from blob
-        if (
-          source.mimeType.startsWith("text/") ||
-          source.mimeType === "application/markdown"
-        ) {
-          const blob = await fetchPrivateBlob(source.blobUrl);
-          if (!blob) throw new Error("Failed to fetch source file");
+          // For text-based files, read directly from blob
+          if (
+            source.mimeType.startsWith("text/") ||
+            source.mimeType === "application/markdown"
+          ) {
+            let blob;
+            try {
+              blob = await fetchPrivateBlob(source.blobUrl);
+            } catch (err) {
+              return {
+                sourceId,
+                text: "",
+                error: `Failed to fetch file from storage: ${(err as Error).message}. The blob URL might be inaccessible.`,
+              };
+            }
+            if (!blob) {
+              return {
+                sourceId,
+                text: "",
+                error: "Failed to fetch source file from blob storage. The file might not exist or the blob store isn't configured.",
+              };
+            }
 
-          const text = await blob.stream
-            .getReader()
-            .read()
-            .then(({ value }) =>
-              new TextDecoder().decode(value)
-            );
+            const text = await blob.stream
+              .getReader()
+              .read()
+              .then(({ value }) =>
+                new TextDecoder().decode(value)
+              );
 
           // Save to DB for future use
           await db
@@ -197,8 +221,23 @@ export function createChatTools(notebookId: string, userId: string, modelId: str
 
         // For PDFs, use the RunPod/docling parser
         if (source.mimeType === "application/pdf") {
-          const blob = await fetchPrivateBlob(source.blobUrl);
-          if (!blob) throw new Error("Failed to fetch PDF from storage");
+          let blob;
+          try {
+            blob = await fetchPrivateBlob(source.blobUrl);
+          } catch (err) {
+            return {
+              sourceId,
+              text: "",
+              error: `Failed to fetch PDF from storage: ${(err as Error).message}. Check BLOB_READ_WRITE_TOKEN is set.`,
+            };
+          }
+          if (!blob) {
+            return {
+              sourceId,
+              text: "",
+              error: "Failed to fetch PDF from blob storage. Check BLOB_READ_WRITE_TOKEN and BLOB_STORE_ID env vars.",
+            };
+          }
 
           // Read all bytes and convert to base64
           const reader = blob.stream.getReader();
@@ -220,7 +259,16 @@ export function createChatTools(notebookId: string, userId: string, modelId: str
           const pdfBase64 = Buffer.from(bytes).toString("base64");
 
           // Parse via RunPod
-          const result = await parsePdfSync(pdfBase64, source.filename);
+          let result;
+          try {
+            result = await parsePdfSync(pdfBase64, source.filename);
+          } catch (err) {
+            return {
+              sourceId,
+              text: "",
+              error: `PDF parsing failed: ${(err as Error).message}. Check RUNPOD_API_KEY and RUNPOD_ENDPOINT_ID env vars.`,
+            };
+          }
 
           // Save to DB
           await db
@@ -255,6 +303,13 @@ export function createChatTools(notebookId: string, userId: string, modelId: str
           text: "",
           error: `Cannot read files of type ${source.mimeType}. Only text files and PDFs are supported.`,
         };
+        } catch (err) {
+          return {
+            sourceId,
+            text: "",
+            error: `readSourceText failed: ${(err as Error).message}`,
+          };
+        }
       },
     }),
 
@@ -349,56 +404,64 @@ export function createChatTools(notebookId: string, userId: string, modelId: str
         sourceId: z.string().uuid().describe("The ID of the audio/video source"),
       }),
       execute: async ({ sourceId }) => {
-        await verifySourceOwnership(sourceId, userId);
+        try {
+          await verifySourceOwnership(sourceId, userId);
 
-        // Check if transcript already exists
-        const [existing] = await db
-          .select()
-          .from(transcripts)
-          .where(eq(transcripts.sourceId, sourceId))
-          .limit(1);
+          // Check if transcript already exists
+          const [existing] = await db
+            .select()
+            .from(transcripts)
+            .where(eq(transcripts.sourceId, sourceId))
+            .limit(1);
 
-        if (existing) {
+          if (existing) {
+            return {
+              sourceId,
+              transcript: existing.content,
+              language: existing.language,
+              durationSeconds: existing.durationSeconds,
+              modelUsed: existing.modelUsed,
+              cached: true,
+            };
+          }
+
+          // No transcript yet — trigger transcription
+          const [source] = await db
+            .select()
+            .from(sources)
+            .where(eq(sources.id, sourceId))
+            .limit(1);
+
+          if (!source) throw new Error("Source not found");
+
+          if (
+            !source.mimeType.startsWith("audio/") &&
+            !source.mimeType.startsWith("video/")
+          ) {
+            return {
+              error:
+                "This source is not an audio/video file. Use readSourceText for documents.",
+            };
+          }
+
+          // Transcribe (this also saves to source_texts for readSourceText)
+          const transcript = await transcribeAudioSource(sourceId);
+
           return {
             sourceId,
-            transcript: existing.content,
-            language: existing.language,
-            durationSeconds: existing.durationSeconds,
-            modelUsed: existing.modelUsed,
-            cached: true,
+            transcript: transcript.content,
+            language: transcript.language,
+            durationSeconds: transcript.durationSeconds,
+            modelUsed: transcript.modelUsed,
+            cached: false,
           };
-        }
-
-        // No transcript yet — trigger transcription
-        const [source] = await db
-          .select()
-          .from(sources)
-          .where(eq(sources.id, sourceId))
-          .limit(1);
-
-        if (!source) throw new Error("Source not found");
-
-        if (
-          !source.mimeType.startsWith("audio/") &&
-          !source.mimeType.startsWith("video/")
-        ) {
+        } catch (err) {
           return {
-            error:
-              "This source is not an audio/video file. Use readSourceText for documents.",
+            sourceId,
+            transcript: "",
+            error: `getTranscript failed: ${(err as Error).message}. Check AI_GATEWAY_API_KEY env var.`,
           };
         }
-
-        // Transcribe (this also saves to source_texts for readSourceText)
-        const transcript = await transcribeAudioSource(sourceId);
-
-        return {
-          sourceId,
-          transcript: transcript.content,
-          language: transcript.language,
-          durationSeconds: transcript.durationSeconds,
-          modelUsed: transcript.modelUsed,
-          cached: false,
-        };
       },
     }),
 
