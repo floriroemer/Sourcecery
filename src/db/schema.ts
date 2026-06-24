@@ -54,7 +54,7 @@ export const notebooks = pgTable(
 export const notebooksRelations = relations(notebooks, ({ one, many }) => ({
   user: one(users, { fields: [notebooks.userId], references: [users.id] }),
   sources: many(sources),
-  messages: many(chatMessages),
+  conversations: many(conversations),
 }));
 
 /**
@@ -189,26 +189,52 @@ export const embeddingsRelations = relations(embeddings, ({ one }) => ({
 }));
 
 /**
- * Chat messages — conversation history per notebook.
+ * Conversations — individual chat threads within a notebook.
+ * Users can have multiple conversations per notebook, switch between them,
+ * and continue past conversations.
  */
-export const chatMessages = pgTable(
-  "chat_messages",
+export const conversations = pgTable(
+  "conversations",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     notebookId: uuid("notebook_id")
       .notNull()
       .references(() => notebooks.id, { onDelete: "cascade" }),
+    title: text("title").default("New conversation").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    notebookIdx: index("conversations_notebook_id_idx").on(t.notebookId),
+  })
+);
+
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
+  notebook: one(notebooks, { fields: [conversations.notebookId], references: [notebooks.id] }),
+  messages: many(chatMessages),
+}));
+
+/**
+ * Chat messages — conversation history per conversation.
+ */
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
     role: text("role").notNull(), // "user" | "assistant"
     content: text("content").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
-    notebookIdx: index("chat_messages_notebook_id_idx").on(t.notebookId),
+    conversationIdx: index("chat_messages_conversation_id_idx").on(t.conversationId),
   })
 );
 
 export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
-  notebook: one(notebooks, { fields: [chatMessages.notebookId], references: [notebooks.id] }),
+  conversation: one(conversations, { fields: [chatMessages.conversationId], references: [conversations.id] }),
 }));
 
 export type User = typeof users.$inferSelect;

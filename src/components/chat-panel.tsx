@@ -2,19 +2,50 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
-import { Send, MessageSquare, Sparkles, ChevronDown, Bot } from "lucide-react";
+import { DefaultChatTransport, type UIMessage } from "ai";
+import {
+  Send,
+  MessageSquare,
+  Sparkles,
+  ChevronDown,
+  Bot,
+  Plus,
+  MessageCircle,
+  Trash2,
+  Clock,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { getModelById } from "@/lib/models";
+import { Markdown } from "@/components/markdown";
+import {
+  createConversation,
+  deleteConversation,
+} from "@/app/actions/conversations";
+import { useRouter } from "next/navigation";
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export function ChatPanel({
   notebookId,
   enabledModels,
+  conversations,
+  activeConversationId,
+  initialMessages,
 }: {
   notebookId: string;
   enabledModels: string[];
+  conversations: ConversationSummary[];
+  activeConversationId: string;
+  initialMessages: UIMessage[];
 }) {
+  const router = useRouter();
+
   // Build the model list from the user's enabled models
   const models = useMemo(
     () =>
@@ -33,20 +64,22 @@ export function ChatPanel({
 
   const [model, setModel] = useState<string>(models[0]?.id ?? "");
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [convoMenuOpen, setConvoMenuOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Recreate transport when model or notebookId changes
+  // Recreate transport when model, notebookId, or conversation changes
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
-        body: { notebookId, model },
+        body: { notebookId, conversationId: activeConversationId, model },
       }),
-    [notebookId, model]
+    [notebookId, activeConversationId, model]
   );
 
-  const { messages, sendMessage, status, error, stop } = useChat({
+  const { messages, sendMessage, status, error, stop, setMessages } = useChat({
     transport,
+    messages: initialMessages,
   });
 
   // Auto-scroll on new messages
@@ -79,12 +112,125 @@ export function ChatPanel({
       .map((p) => p.text ?? "")
       .join("");
 
+  // Find the active conversation title
+  const activeConvo = conversations.find(
+    (c) => c.id === activeConversationId
+  );
+
+  // Handle new conversation
+  const handleNewConversation = useCallback(async () => {
+    const convo = await createConversation(notebookId);
+    router.push(`/notebooks/${notebookId}?c=${convo.id}`);
+    router.refresh();
+  }, [notebookId, router]);
+
+  // Handle delete conversation
+  const handleDeleteConversation = useCallback(
+    async (convoId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      await deleteConversation(convoId, notebookId);
+      router.refresh();
+    },
+    [notebookId, router]
+  );
+
+  // Format relative time
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHr = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHr / 24);
+    if (diffMin < 1) return "just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHr < 24) return `${diffHr}h ago`;
+    if (diffDay < 7) return `${diffDay}d ago`;
+    return date.toLocaleDateString();
+  };
+
   return (
     <div className="flex h-full flex-col">
-      {/* Header with model selector */}
+      {/* Header with conversation selector + model selector */}
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card px-4">
-        <MessageSquare className="h-4 w-4 text-brand-600" />
-        <span className="text-sm font-semibold">Chat</span>
+        {/* Conversation selector dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setConvoMenuOpen(!convoMenuOpen)}
+            className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold transition-colors hover:bg-muted"
+          >
+            <MessageCircle className="h-4 w-4 text-brand-600" />
+            <span className="max-w-[180px] truncate">
+              {activeConvo?.title ?? "New conversation"}
+            </span>
+            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+          </button>
+          {convoMenuOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setConvoMenuOpen(false)}
+              />
+              <div className="absolute left-0 top-full z-20 mt-2 w-72 rounded-xl border border-border bg-card p-1.5 shadow-xl">
+                {/* New conversation button */}
+                <button
+                  onClick={() => {
+                    handleNewConversation();
+                    setConvoMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-brand-700 transition-colors hover:bg-brand-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  New conversation
+                </button>
+
+                {conversations.length > 0 && (
+                  <div className="my-1 border-t border-border" />
+                )}
+
+                {/* Conversation list */}
+                <div className="max-h-64 overflow-y-auto">
+                  {conversations.map((convo) => (
+                    <div
+                      key={convo.id}
+                      className={`group flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
+                        convo.id === activeConversationId
+                          ? "bg-brand-50 ring-1 ring-brand-200"
+                          : ""
+                      }`}
+                    >
+                      <button
+                        onClick={() => {
+                          router.push(
+                            `/notebooks/${notebookId}?c=${convo.id}`
+                          );
+                          setConvoMenuOpen(false);
+                        }}
+                        className="flex min-w-0 flex-1 items-center gap-2"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{convo.title}</span>
+                      </button>
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                        {formatTime(convo.updatedAt)}
+                      </span>
+                      <button
+                        onClick={(e) =>
+                          handleDeleteConversation(convo.id, e)
+                        }
+                        className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+                        title="Delete conversation"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Model selector — prominent pill button */}
         <div className="relative ml-auto">
@@ -126,7 +272,7 @@ export function ChatPanel({
                           : "bg-muted text-muted-foreground"
                       }`}
                     >
-                      {m.provider === "OpenAI" ? "OA" : "ME"}
+                      {m.provider.slice(0, 2).toUpperCase()}
                     </div>
                     <div>
                       <div className="font-medium">{m.label}</div>
@@ -156,23 +302,21 @@ export function ChatPanel({
               Ask anything about your sources
             </h3>
             <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-              Upload files in the left panel, then ask questions. AI responses
-              are powered by{" "}
+              Upload files in the left panel, then ask questions. The AI can
+              read your documents, search within them, and save summaries &
+              notes. Powered by{" "}
               <span className="font-semibold text-brand-600">
                 {selectedModel.label}
               </span>{" "}
               with an agentic tool loop.
             </p>
-            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              ⚠️ RAG integration coming soon — AI can&apos;t see your files yet.
-            </div>
           </div>
         ) : (
           <div className="mx-auto max-w-2xl space-y-4">
             {messages.map((message) => {
               const text = getTextContent(message.parts);
-              const toolParts = message.parts.filter(
-                (p) => p.type.startsWith("tool-")
+              const toolParts = message.parts.filter((p) =>
+                p.type.startsWith("tool-")
               );
 
               return (
@@ -180,11 +324,7 @@ export function ChatPanel({
                   key={message.id}
                   className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  <div
-                    className={`max-w-[80%] space-y-2 ${
-                      message.role === "user" ? "" : ""
-                    }`}
-                  >
+                  <div className="max-w-[80%] space-y-2">
                     {/* Tool invocations — show thinking GIF inline */}
                     {toolParts.map((part, i) => {
                       if (part.type !== "tool-showThinkingGif") return null;
@@ -220,13 +360,17 @@ export function ChatPanel({
                     {/* Text content */}
                     {text && (
                       <div
-                        className={`whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                        className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                           message.role === "user"
-                            ? "bg-brand-600 text-white"
+                            ? "whitespace-pre-wrap bg-brand-600 text-white"
                             : "bg-card border border-border"
                         }`}
                       >
-                        {text}
+                        {message.role === "user" ? (
+                          text
+                        ) : (
+                          <Markdown content={text} />
+                        )}
                       </div>
                     )}
 

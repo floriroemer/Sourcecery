@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "highlight.js/styles/github-dark.css";
 
 @theme {
   /* Fonts */
@@ -74,4 +75,22 @@
 
 .animate-marquee {
   animation: marquee 30s linear infinite;
+}
+
+/* Border width 3 (used by blockquote) */
+.border-l-3 {
+  border-left-width: 3px;
+}
+
+/* Markdown chat styling */
+.prose-chat {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+/* Override highlight.js background to match our code block */
+.prose-chat pre code.hljs {
+  background: transparent;
+  padding: 0;
 }

@@ -1,7 +1,7 @@
 import { streamText, stepCountIs, convertToModelMessages } from "ai";
 import { gateway } from "@ai-sdk/gateway";
 import { db } from "@/db";
-import { chatMessages, notebooks, users } from "@/db/schema";
+import { chatMessages, conversations, notebooks, users } from "@/db/schema";
 import { getCurrentUserId } from "@/lib/auth";
 import { eq, and } from "drizzle-orm";
 import { DEFAULT_ENABLED_MODELS } from "@/lib/models";
@@ -16,12 +16,12 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
-  const { notebookId, model: requestedModel } = body;
+  const { notebookId, conversationId, model: requestedModel } = body;
   const messages = body.messages;
 
-  if (!notebookId || !messages) {
+  if (!notebookId || !conversationId || !messages) {
     return new Response(
-      JSON.stringify({ error: "Missing notebookId or messages" }),
+      JSON.stringify({ error: "Missing notebookId, conversationId, or messages" }),
       { status: 400 }
     );
   }
@@ -55,6 +55,24 @@ export async function POST(req: Request) {
     });
   }
 
+  // Verify the conversation belongs to this notebook
+  const [conversation] = await db
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.id, conversationId),
+        eq(conversations.notebookId, notebookId)
+      )
+    )
+    .limit(1);
+
+  if (!conversation) {
+    return new Response(JSON.stringify({ error: "Conversation not found" }), {
+      status: 404,
+    });
+  }
+
   // Save the latest user message to DB
   const lastUserMessage = [...messages].reverse().find(
     (m: { role: string }) => m.role === "user"
@@ -71,10 +89,25 @@ export async function POST(req: Request) {
           : "";
     if (userText) {
       await db.insert(chatMessages).values({
-        notebookId,
+        conversationId,
         role: "user",
         content: userText,
       });
+
+      // Auto-title the conversation from the first user message
+      if (conversation.title === "New conversation") {
+        const title = userText.slice(0, 50) + (userText.length > 50 ? "..." : "");
+        await db
+          .update(conversations)
+          .set({ title, updatedAt: new Date() })
+          .where(eq(conversations.id, conversationId));
+      } else {
+        // Just update the timestamp
+        await db
+          .update(conversations)
+          .set({ updatedAt: new Date() })
+          .where(eq(conversations.id, conversationId));
+      }
     }
   }
 
@@ -133,10 +166,15 @@ Call it when you're about to do complex work or read documents.`;
       // Save assistant response to DB after streaming completes
       if (text.trim()) {
         await db.insert(chatMessages).values({
-          notebookId,
+          conversationId,
           role: "assistant",
           content: text,
         });
+        // Update conversation timestamp
+        await db
+          .update(conversations)
+          .set({ updatedAt: new Date() })
+          .where(eq(conversations.id, conversationId));
       }
     },
   });

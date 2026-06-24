@@ -3,6 +3,11 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getNotebookWithSources } from "@/app/actions/notebooks";
 import { getEnabledModels } from "@/app/actions/settings";
+import {
+  getConversations,
+  createConversationRender,
+  getConversationWithMessages,
+} from "@/app/actions/conversations";
 import { SourceList } from "@/components/source-list";
 import { ChatPanel } from "@/components/chat-panel";
 import { NotesPanel } from "@/components/notes-panel";
@@ -12,16 +17,41 @@ export const dynamic = "force-dynamic";
 
 export default async function NotebookPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ c?: string }>;
 }) {
   const { id } = await params;
+  const { c: conversationIdParam } = await searchParams;
   const data = await getNotebookWithSources(id);
 
   if (!data) notFound();
 
   const { notebook, sources } = data;
   const enabledModels = await getEnabledModels();
+  const conversations = await getConversations(notebook.id);
+
+  // Determine the active conversation
+  let activeConversationId = conversationIdParam ?? conversations[0]?.id ?? "";
+
+  // If no conversations exist, create one (render-safe, no revalidatePath)
+  if (!activeConversationId) {
+    const newConvo = await createConversationRender(notebook.id);
+    activeConversationId = newConvo.id;
+  }
+
+  // Load messages for the active conversation
+  let initialMessages: { id: string; role: "user" | "assistant"; parts: { type: "text"; text: string }[] }[] = [];
+  if (activeConversationId) {
+    const convoData = await getConversationWithMessages(
+      activeConversationId,
+      notebook.id
+    );
+    if (convoData) {
+      initialMessages = convoData.messages;
+    }
+  }
 
   return (
     <div className="flex h-screen flex-col">
@@ -57,7 +87,18 @@ export default async function NotebookPage({
 
         {/* Center: Chat */}
         <div className="flex-1 overflow-hidden">
-          <ChatPanel notebookId={notebook.id} enabledModels={enabledModels} />
+          <ChatPanel
+            notebookId={notebook.id}
+            enabledModels={enabledModels}
+            conversations={conversations.map((c) => ({
+              id: c.id,
+              title: c.title,
+              createdAt: c.createdAt.toISOString(),
+              updatedAt: c.updatedAt.toISOString(),
+            }))}
+            activeConversationId={activeConversationId}
+            initialMessages={initialMessages}
+          />
         </div>
 
         {/* Right: Notes / Audio */}
