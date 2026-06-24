@@ -7,6 +7,7 @@ import { getCurrentUserId } from "@/lib/auth";
 import { eq, and } from "drizzle-orm";
 import { DEFAULT_ENABLED_MODELS } from "@/lib/models";
 import { createChatTools } from "@/lib/ai-tools";
+import { compactMessages } from "@/lib/compaction";
 
 export async function POST(req: Request) {
   const userId = await getCurrentUserId();
@@ -151,6 +152,12 @@ The citations will appear as clickable badges in the chat so the user can verify
 
 This strategy saves time and tokens — always check summaries and notes BEFORE reading full documents.
 
+## CONTEXT WINDOW MANAGEMENT
+
+Older tool outputs may be truncated to save context. This is normal.
+If you need the full content of a source again, call readSourceText or getSummary
+to re-read it. Always prefer getSummary over readSourceText to save context.
+
 You can think step by step and call tools in a loop until you have a complete answer.
 Be concise, clear, and cite specific details from the sources when possible.
 
@@ -200,6 +207,11 @@ Call it when you're about to do complex work or read documents.`;
 
   const modelMessages = await convertToModelMessages(cleanedMessages);
 
+  // Context window management: compact messages when approaching 80% of the
+  // model's context window. Older messages are replaced with a summary placeholder.
+  // Context window size is fetched from the AI Gateway API (/v1/models/{modelId}).
+  const managedMessages = await compactMessages(modelMessages, model);
+
   // Create tools with notebook + user context for security
   const tools = createChatTools(notebookId, userId, model);
 
@@ -207,7 +219,7 @@ Call it when you're about to do complex work or read documents.`;
   const result = streamText({
     model: gateway(model),
     system: systemPrompt,
-    messages: modelMessages,
+    messages: managedMessages,
     stopWhen: stepCountIs(10), // Run up to 10 steps (agentic loop)
     tools,
     onError: ({ error }) => {
