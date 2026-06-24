@@ -106,7 +106,7 @@ export function ModelSettings({ initialEnabled }: { initialEnabled: string[] }) 
                     disabled={disabled}
                     className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-all ${
                       isEnabled
-                        ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200"
+                        ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-800"
                         : disabled
                           ? "cursor-not-allowed border-border bg-muted/50 opacity-50"
                           : "border-border hover:border-brand-300 hover:bg-muted/50"

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { UserButton, useAuth } from "@clerk/nextjs";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function Navbar() {
   const { isSignedIn } = useAuth();
@@ -14,6 +15,9 @@ export function Navbar() {
         <Logo />
 
         <nav className="flex items-center gap-2 sm:gap-4">
+          {/* Theme toggle — only on landing page (not signed in) */}
+          {!isSignedIn && <ThemeToggle />}
+
           {!isSignedIn ? (
             <>
               <Link href="/sign-in">

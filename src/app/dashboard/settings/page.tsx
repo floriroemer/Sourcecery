@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ModelSettings } from "@/components/model-settings";
+import { ThemeSettings } from "@/components/theme-settings";
 import { getEnabledModels } from "@/app/actions/settings";
 
 export default async function SettingsPage() {
@@ -35,6 +36,8 @@ export default async function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        <ThemeSettings />
 
         <ModelSettings initialEnabled={enabledModels} />
       </div>

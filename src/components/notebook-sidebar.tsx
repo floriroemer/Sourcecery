@@ -36,7 +36,7 @@ export function NotebookSidebar() {
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 active
-                  ? "bg-brand-50 text-brand-700"
+                  ? "bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >

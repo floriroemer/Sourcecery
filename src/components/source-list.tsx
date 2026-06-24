@@ -140,7 +140,7 @@ export function SourceList({
           onClick={() => fileInputRef.current?.click()}
           className={`cursor-pointer rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
             isDragging
-              ? "border-brand-500 bg-brand-50"
+              ? "border-brand-500 bg-brand-50 dark:border-brand-600 dark:bg-brand-950/40"
               : "border-border hover:border-brand-300 hover:bg-muted/50"
           }`}
         >

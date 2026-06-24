@@ -179,7 +179,7 @@ export function ChatPanel({
                     handleNewConversation();
                     setConvoMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-brand-700 transition-colors hover:bg-brand-50"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-brand-700 transition-colors hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-950/40"
                 >
                   <Plus className="h-4 w-4" />
                   New conversation
@@ -196,7 +196,7 @@ export function ChatPanel({
                       key={convo.id}
                       className={`group flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
                         convo.id === activeConversationId
-                          ? "bg-brand-50 ring-1 ring-brand-200"
+                          ? "bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-800"
                           : ""
                       }`}
                     >
@@ -236,7 +236,7 @@ export function ChatPanel({
         <div className="relative ml-auto">
           <button
             onClick={() => setModelMenuOpen(!modelMenuOpen)}
-            className="flex items-center gap-2 rounded-full border-2 border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 shadow-sm transition-all hover:border-brand-400 hover:bg-brand-100 hover:shadow-md"
+            className="flex items-center gap-2 rounded-full border-2 border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 shadow-sm transition-all hover:border-brand-400 hover:bg-brand-100 hover:shadow-md dark:border-brand-800 dark:bg-brand-950/40 dark:text-brand-300 dark:hover:bg-brand-900/60"
           >
             <Bot className="h-3.5 w-3.5" />
             <span>{selectedModel.label}</span>
@@ -261,7 +261,7 @@ export function ChatPanel({
                     }}
                     className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted ${
                       m.id === model
-                        ? "bg-brand-50 ring-1 ring-brand-200"
+                        ? "bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-800"
                         : ""
                     }`}
                   >
@@ -341,7 +341,7 @@ export function ChatPanel({
                       return (
                         <div
                           key={i}
-                          className="w-fit overflow-hidden rounded-2xl border border-brand-200 bg-brand-50"
+                          className="w-fit overflow-hidden rounded-2xl border border-brand-200 bg-brand-50 dark:border-brand-800 dark:bg-brand-950/40"
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
