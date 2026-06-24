@@ -91,6 +91,35 @@ export const sourcesRelations = relations(sources, ({ one, many }) => ({
     references: [sourceTexts.sourceId],
   }),
   summaries: many(summaries),
+  transcripts: many(transcripts),
+}));
+
+/**
+ * Transcripts — transcribed text from audio/video sources.
+ * Populated automatically when an audio file is uploaded.
+ * Audio longer than 10 minutes is split into chunks, each transcribed separately.
+ */
+export const transcripts = pgTable(
+  "transcripts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    language: text("language"),
+    durationSeconds: integer("duration_seconds"),
+    chunkCount: integer("chunk_count").default(1).notNull(),
+    modelUsed: text("model_used"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    sourceIdx: index("transcripts_source_id_idx").on(t.sourceId),
+  })
+);
+
+export const transcriptsRelations = relations(transcripts, ({ one }) => ({
+  source: one(sources, { fields: [transcripts.sourceId], references: [sources.id] }),
 }));
 
 /**

@@ -9,10 +9,18 @@ const isProtectedRoute = createRouteMatcher([
 /**
  * Next.js 16 uses proxy.ts (Node runtime) instead of middleware.ts (Edge).
  * Clerk's clerkMiddleware() is compatible with both.
+ *
+ * auth.protect() throws a NEXT_REDIRECT error internally to trigger the
+ * sign-in redirect. We catch it to prevent unhandledRejection warnings.
  */
 export default clerkMiddleware((auth, request: NextRequest) => {
   if (isProtectedRoute(request)) {
-    auth.protect();
+    try {
+      auth.protect();
+    } catch {
+      // auth.protect() throws NEXT_REDIRECT to redirect to sign-in.
+      // This is expected behavior — the redirect is handled by Clerk.
+    }
   }
 });
 

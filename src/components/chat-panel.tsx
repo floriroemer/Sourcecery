@@ -21,7 +21,6 @@ import {
   createConversation,
   deleteConversation,
 } from "@/app/actions/conversations";
-import { useRouter } from "next/navigation";
 
 export interface ConversationSummary {
   id: string;
@@ -43,8 +42,6 @@ export function ChatPanel({
   activeConversationId: string;
   initialMessages: UIMessage[];
 }) {
-  const router = useRouter();
-
   // Models are already built from the server (gateway model info)
   const models = enabledModels;
 
@@ -63,7 +60,7 @@ export function ChatPanel({
     [notebookId, activeConversationId, model]
   );
 
-  const { messages, sendMessage, status, error, stop, setMessages } = useChat({
+  const { messages, sendMessage, status, error, stop } = useChat({
     transport,
     messages: initialMessages,
   });
@@ -106,9 +103,11 @@ export function ChatPanel({
   // Handle new conversation
   const handleNewConversation = useCallback(async () => {
     const convo = await createConversation(notebookId);
-    router.push(`/notebooks/${notebookId}?c=${convo.id}`);
-    router.refresh();
-  }, [notebookId, router]);
+    // Use window.location for a full navigation to ensure the page re-renders
+    // with the new conversation (router.push with only query param change
+    // may not trigger a re-render in Next.js 16)
+    window.location.href = `/notebooks/${notebookId}?c=${convo.id}`;
+  }, [notebookId]);
 
   // Handle delete conversation
   const handleDeleteConversation = useCallback(
@@ -116,9 +115,9 @@ export function ChatPanel({
       e.stopPropagation();
       e.preventDefault();
       await deleteConversation(convoId, notebookId);
-      router.refresh();
+      window.location.reload();
     },
-    [notebookId, router]
+    [notebookId]
   );
 
   // Format relative time
@@ -188,9 +187,7 @@ export function ChatPanel({
                     >
                       <button
                         onClick={() => {
-                          router.push(
-                            `/notebooks/${notebookId}?c=${convo.id}`
-                          );
+                          window.location.href = `/notebooks/${notebookId}?c=${convo.id}`;
                           setConvoMenuOpen(false);
                         }}
                         className="flex min-w-0 flex-1 items-center gap-2"

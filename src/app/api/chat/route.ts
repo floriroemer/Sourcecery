@@ -113,7 +113,7 @@ export async function POST(req: Request) {
 
   const systemPrompt = `You are Sourcecery, a helpful AI research assistant. You help users understand their uploaded sources.
 
-You have access to tools that let you read the user's uploaded documents, save summaries, and take notes.
+You have access to tools that let you read the user's uploaded documents, transcribe audio, save summaries, and take notes.
 
 ## IMPORTANT: Tool Usage Strategy
 
@@ -122,6 +122,7 @@ When a user asks about their sources, follow this order:
 2. **Call listSources** — see what files are in the notebook
 3. **Call getSummary for each relevant source** — check if a summary already exists
 4. **Only if no summary exists, read the document:**
+   - Use **getTranscript** for audio/video sources (transcribes via Whisper if needed)
    - Use **readSourceFile** for PDFs if you support direct PDF input (you can see layout, images, tables)
    - Use **readSourceText** for text files, or for PDFs if you don't support direct PDF input (extracts text via docling)
 5. **After reading a document, call saveSummary** — so you don't have to re-read it next time
@@ -135,8 +136,32 @@ Be concise, clear, and cite specific details from the sources when possible.
 You also have a fun tool called "showThinkingGif" that displays a funny thinking GIF to the user.
 Call it when you're about to do complex work or read documents.`;
 
-  // Convert UI messages to model messages for the AI
-  const modelMessages = await convertToModelMessages(messages);
+  // Convert UI messages to model messages for the AI.
+  // Filter out parts that don't match the ModelMessage schema:
+  // - file parts (from readSourceFile dataUrl)
+  // - incomplete tool calls (input-streaming state)
+  // - tool calls without outputs (input-available without output-available)
+  const cleanedMessages = messages
+    .map((msg: any) => ({
+      ...msg,
+      parts: msg.parts?.filter((part: any) => {
+        // Drop file/data parts
+        if (part.type === "file") return false;
+
+        // For tool parts, only keep completed ones (with output)
+        if (part.type?.startsWith("tool-")) {
+          // Keep only tool parts that have output available
+          return part.state === "output-available" || part.state === "output-error";
+        }
+
+        // Keep text, reasoning, and everything else
+        return true;
+      }),
+    }))
+    // Drop messages that have no parts after filtering
+    .filter((msg: any) => msg.parts && msg.parts.length > 0);
+
+  const modelMessages = await convertToModelMessages(cleanedMessages);
 
   // Create tools with notebook + user context for security
   const tools = createChatTools(notebookId, userId, model);

@@ -8,10 +8,12 @@ import {
   summaries,
   notes,
   notebooks,
+  transcripts,
 } from "@/db/schema";
 import { fetchPrivateBlob } from "@/lib/blob";
 import { parsePdfSync } from "@/lib/runpod";
 import { supportsPdfInput } from "@/lib/model-registry";
+import { transcribeAudioSource } from "@/lib/transcribe";
 
 /**
  * AI Tools for the Sourcecery agentic chat.
@@ -329,6 +331,73 @@ export function createChatTools(notebookId: string, userId: string, modelId: str
           dataUrl,
           sizeBytes: bytes.length,
           note: "The PDF has been attached. You can now see its full content including layout, images, and tables.",
+        };
+      },
+    }),
+
+    // ──────────────────────────────────────────────────────────────
+    // 2c. GET TRANSCRIPT — read or trigger transcription of an audio source
+    // ──────────────────────────────────────────────────────────────
+    getTranscript: tool({
+      description:
+        "Get the transcript of an audio or video source. " +
+        "If the transcript already exists, returns it immediately. " +
+        "If no transcript exists yet, triggers transcription automatically via the AI Gateway (Whisper). " +
+        "Use this for audio/video sources instead of readSourceText. " +
+        "Returns the transcript text, detected language, and duration.",
+      inputSchema: z.object({
+        sourceId: z.string().uuid().describe("The ID of the audio/video source"),
+      }),
+      execute: async ({ sourceId }) => {
+        await verifySourceOwnership(sourceId, userId);
+
+        // Check if transcript already exists
+        const [existing] = await db
+          .select()
+          .from(transcripts)
+          .where(eq(transcripts.sourceId, sourceId))
+          .limit(1);
+
+        if (existing) {
+          return {
+            sourceId,
+            transcript: existing.content,
+            language: existing.language,
+            durationSeconds: existing.durationSeconds,
+            modelUsed: existing.modelUsed,
+            cached: true,
+          };
+        }
+
+        // No transcript yet — trigger transcription
+        const [source] = await db
+          .select()
+          .from(sources)
+          .where(eq(sources.id, sourceId))
+          .limit(1);
+
+        if (!source) throw new Error("Source not found");
+
+        if (
+          !source.mimeType.startsWith("audio/") &&
+          !source.mimeType.startsWith("video/")
+        ) {
+          return {
+            error:
+              "This source is not an audio/video file. Use readSourceText for documents.",
+          };
+        }
+
+        // Transcribe (this also saves to source_texts for readSourceText)
+        const transcript = await transcribeAudioSource(sourceId);
+
+        return {
+          sourceId,
+          transcript: transcript.content,
+          language: transcript.language,
+          durationSeconds: transcript.durationSeconds,
+          modelUsed: transcript.modelUsed,
+          cached: false,
         };
       },
     }),

@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { sources, notebooks } from "@/db/schema";
 import { getCurrentUserId } from "@/lib/auth";
 import { uploadToBlob } from "@/lib/blob";
+import { transcribeAudioSource } from "@/lib/transcribe";
 import {
   ALL_ACCEPTED_MIME_TYPES,
   MAX_FILE_SIZE,
@@ -85,6 +86,14 @@ export async function POST(req: NextRequest) {
 
     // Revalidate dashboard so source count updates
     revalidatePath("/dashboard");
+
+    // Auto-transcribe audio files in the background
+    if (file.type.startsWith("audio/") || file.type.startsWith("video/")) {
+      // Don't await — run transcription in the background
+      transcribeAudioSource(source.id).catch((err) => {
+        console.error(`[Upload] Auto-transcription failed for ${source.id}:`, err.message);
+      });
+    }
 
     return NextResponse.json({ source }, { status: 201 });
   } catch (error) {

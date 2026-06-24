@@ -98,6 +98,7 @@ export default async function NotebookPage({
         {/* Center: Chat */}
         <div className="flex-1 overflow-hidden">
           <ChatPanel
+            key={activeConversationId}
             notebookId={notebook.id}
             enabledModels={enabledModelInfos}
             conversations={conversations.map((c) => ({
