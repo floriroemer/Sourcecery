@@ -480,27 +480,43 @@ export function ChatPanel({
 
       {/* Error */}
       {error && (
-        <div className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-3 text-xs text-red-600">
+        <div className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-3 text-xs text-red-600 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400">
           {error.message.includes("rate-limited") ||
           error.message.includes("429") ? (
-            <div>
-              <p className="font-semibold">⚠️ Rate limit reached</p>
-              <p className="mt-1">
-                The AI Gateway free tier limit was hit. Try again in a minute,
-                or upgrade your Vercel AI credits at{" "}
-                <a
-                  href="https://vercel.com/~/ai"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline font-medium"
-                >
-                  vercel.com/~/ai
-                </a>
-                .
-              </p>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-semibold">⚠️ Rate limit reached</p>
+                <p className="mt-1">
+                  The AI Gateway free tier limit was hit. Try again in a minute,
+                  or upgrade your Vercel AI credits at{" "}
+                  <a
+                    href="https://vercel.com/~/ai"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline font-medium"
+                  >
+                    vercel.com/~/ai
+                  </a>
+                  .
+                </p>
+              </div>
+              <button
+                onClick={() => window.location.reload()}
+                className="shrink-0 rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-950/50"
+              >
+                Retry
+              </button>
             </div>
           ) : (
-            error.message
+            <div className="flex items-center justify-between gap-3">
+              <span>{error.message}</span>
+              <button
+                onClick={() => window.location.reload()}
+                className="shrink-0 rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-950/50"
+              >
+                Retry
+              </button>
+            </div>
           )}
         </div>
       )}

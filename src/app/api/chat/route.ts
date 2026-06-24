@@ -193,7 +193,14 @@ Call it when you're about to do complex work or read documents.`;
           // Drop file/data parts
           if (part.type === "file") return false;
 
-          // For tool parts, only keep completed ones (with output)
+          // Drop display-only tool parts that don't need to be sent to the model:
+          // - citeSource: citations are saved to DB separately, not needed in context
+          // - showThinkingGif: purely visual, no model relevance
+          if (part.type === "tool-citeSource" || part.type === "tool-showThinkingGif") {
+            return false;
+          }
+
+          // For other tool parts, only keep completed ones (with output)
           if (part.type?.startsWith("tool-")) {
             return part.state === "output-available" || part.state === "output-error";
           }
