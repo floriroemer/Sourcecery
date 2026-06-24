@@ -128,6 +128,26 @@ When a user asks about their sources, follow this order:
 5. **After reading a document, call saveSummary** — so you don't have to re-read it next time
 6. **Call saveNote** for any important findings you discover
 
+## CITATIONS — VERY IMPORTANT
+
+You MUST cite your sources using the **citeSource** tool. Every factual statement or claim
+that comes from a source should have a citation. Call citeSource as often as possible.
+
+**NEVER write citations as text like [filename] or (source).** Always use the citeSource TOOL.
+The tool will create a clickable citation badge automatically. Do not type citation markers.
+
+When to cite:
+- After quoting or paraphrasing from a source
+- When stating a fact that you learned from a document
+- When referencing specific information from a transcript
+
+How to cite:
+- Call citeSource with the sourceId, the exact quote, and an optional label
+- You can cite the same source multiple times with different quotes
+- Call citeSource DURING your response, right after the statement it supports
+
+The citations will appear as clickable badges in the chat so the user can verify your claims.
+
 This strategy saves time and tokens — always check summaries and notes BEFORE reading full documents.
 
 You can think step by step and call tools in a loop until you have a complete answer.
@@ -141,25 +161,41 @@ Call it when you're about to do complex work or read documents.`;
   // - file parts (from readSourceFile dataUrl)
   // - incomplete tool calls (input-streaming state)
   // - tool calls without outputs (input-available without output-available)
+  // Also drop the last message if it's an incomplete assistant message (e.g. user clicked Stop)
   const cleanedMessages = messages
-    .map((msg: any) => ({
-      ...msg,
-      parts: msg.parts?.filter((part: any) => {
-        // Drop file/data parts
-        if (part.type === "file") return false;
-
-        // For tool parts, only keep completed ones (with output)
-        if (part.type?.startsWith("tool-")) {
-          // Keep only tool parts that have output available
-          return part.state === "output-available" || part.state === "output-error";
+    .map((msg: any, idx: number) => {
+      // Drop the last message if it's an assistant message with no text and only incomplete tool calls
+      // (this happens when the user clicks Stop mid-response)
+      const isLast = idx === messages.length - 1;
+      if (isLast && msg.role === "assistant") {
+        const hasText = msg.parts?.some((p: any) => p.type === "text" && p.text?.trim());
+        const hasCompleteTool = msg.parts?.some(
+          (p: any) =>
+            p.type?.startsWith("tool-") &&
+            (p.state === "output-available" || p.state === "output-error")
+        );
+        if (!hasText && !hasCompleteTool) {
+          return null; // Drop this message entirely
         }
+      }
 
-        // Keep text, reasoning, and everything else
-        return true;
-      }),
-    }))
-    // Drop messages that have no parts after filtering
-    .filter((msg: any) => msg.parts && msg.parts.length > 0);
+      return {
+        ...msg,
+        parts: msg.parts?.filter((part: any) => {
+          // Drop file/data parts
+          if (part.type === "file") return false;
+
+          // For tool parts, only keep completed ones (with output)
+          if (part.type?.startsWith("tool-")) {
+            return part.state === "output-available" || part.state === "output-error";
+          }
+
+          // Keep text, reasoning, and everything else
+          return true;
+        }),
+      };
+    })
+    .filter((msg: any) => msg !== null && msg.parts && msg.parts.length > 0);
 
   const modelMessages = await convertToModelMessages(cleanedMessages);
 

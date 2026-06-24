@@ -8,6 +8,7 @@ import {
   createConversationRender,
   getConversationWithMessages,
 } from "@/app/actions/conversations";
+import { getNotes } from "@/app/actions/notes";
 import { SourceList } from "@/components/source-list";
 import { ChatPanel } from "@/components/chat-panel";
 import { NotesPanel } from "@/components/notes-panel";
@@ -32,6 +33,7 @@ export default async function NotebookPage({
   const enabledModels = await getEnabledModels();
   const allGatewayModels = await getAvailableModels();
   const conversations = await getConversations(notebook.id);
+  const notebookNotes = await getNotes(notebook.id);
 
   // Build model info for the enabled models (label, provider from gateway)
   const enabledModelInfos = enabledModels
@@ -114,7 +116,16 @@ export default async function NotebookPage({
 
         {/* Right: Notes / Audio */}
         <div className="hidden w-80 shrink-0 border-l border-border bg-card overflow-y-auto lg:block">
-          <NotesPanel />
+          <NotesPanel
+            notebookId={notebook.id}
+            notes={notebookNotes.map((n) => ({
+              id: n.id,
+              title: n.title,
+              content: n.content,
+              isSource: n.isSource,
+              createdAt: n.createdAt.toISOString(),
+            }))}
+          />
         </div>
       </div>
     </div>

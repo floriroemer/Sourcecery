@@ -609,7 +609,55 @@ export function createChatTools(notebookId: string, userId: string, modelId: str
     }),
 
     // ──────────────────────────────────────────────────────────────
-    // 8. SHOW THINKING GIF — fun visual cue (random GIF)
+    // 8. CITE SOURCE — attach a citation to the response
+    // ──────────────────────────────────────────────────────────────
+    citeSource: tool({
+      description:
+        "Cite a source to back up a claim in your response. " +
+        "Call this AFTER reading a source and whenever you include information from it. " +
+        "Use it as often as possible — every factual statement should have a citation. " +
+        "You can cite the same source multiple times with different quotes/excerpts. " +
+        "The citation will be displayed as a clickable badge in the chat so the user can verify the source.",
+      inputSchema: z.object({
+        sourceId: z.string().uuid().describe("The ID of the source being cited"),
+        quote: z
+          .string()
+          .min(5)
+          .describe("The exact quote or excerpt from the source that supports your claim"),
+        label: z
+          .string()
+          .optional()
+          .describe("A short label for the citation (e.g. 'Page 3', 'Paragraph 2'). Defaults to the source filename."),
+      }),
+      execute: async ({ sourceId, quote, label }) => {
+        await verifySourceOwnership(sourceId, userId);
+
+        const [source] = await db
+          .select({
+            id: sources.id,
+            filename: sources.filename,
+            mimeType: sources.mimeType,
+            blobUrl: sources.blobUrl,
+          })
+          .from(sources)
+          .where(eq(sources.id, sourceId))
+          .limit(1);
+
+        if (!source) throw new Error("Source not found");
+
+        return {
+          sourceId: source.id,
+          filename: source.filename,
+          mimeType: source.mimeType,
+          blobUrl: source.blobUrl,
+          quote,
+          label: label ?? source.filename,
+        };
+      },
+    }),
+
+    // ──────────────────────────────────────────────────────────────
+    // 9. SHOW THINKING GIF — fun visual cue (random GIF)
     // ──────────────────────────────────────────────────────────────
     showThinkingGif: tool({
       description:

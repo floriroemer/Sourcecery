@@ -13,6 +13,11 @@ import {
   MessageCircle,
   Trash2,
   Clock,
+  StickyNote,
+  BookMarked,
+  FileText,
+  AudioLines,
+  FileAudio,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +26,7 @@ import {
   createConversation,
   deleteConversation,
 } from "@/app/actions/conversations";
+import { createNote } from "@/app/actions/notes";
 
 export interface ConversationSummary {
   id: string;
@@ -116,6 +122,21 @@ export function ChatPanel({
       e.preventDefault();
       await deleteConversation(convoId, notebookId);
       window.location.reload();
+    },
+    [notebookId]
+  );
+
+  // Save an AI answer as a note
+  const handleSaveToNote = useCallback(
+    async (text: string) => {
+      const title = text.slice(0, 50) + (text.length > 50 ? "..." : "");
+      try {
+        await createNote(notebookId, title, text);
+        // Reload to show the note in the notes panel
+        window.location.reload();
+      } catch (err) {
+        console.error("Failed to save note:", err);
+      }
     },
     [notebookId]
   );
@@ -356,6 +377,87 @@ export function ChatPanel({
                         )}
                       </div>
                     )}
+
+                    {/* Save to note button — only for assistant messages with text */}
+                    {message.role === "assistant" && text && !isLoading && (
+                      <button
+                        onClick={() => handleSaveToNote(text)}
+                        className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-brand-600"
+                        title="Save this answer as a note"
+                      >
+                        <StickyNote className="h-3 w-3" />
+                        Save to note
+                      </button>
+                    )}
+
+                    {/* Citations — render citeSource tool results as clickable cards */}
+                    {message.role === "assistant" &&
+                      (() => {
+                        const citations = toolParts
+                          .filter((p) => p.type === "tool-citeSource" && (p as any).state === "output-available")
+                          .map((part) => (part as any).output as {
+                            sourceId: string;
+                            filename: string;
+                            mimeType: string;
+                            blobUrl: string;
+                            quote: string;
+                            label: string;
+                          })
+                          .filter(Boolean);
+
+                        if (citations.length === 0) return null;
+
+                        return (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              <BookMarked className="h-3 w-3" />
+                              Sources ({citations.length})
+                            </div>
+                            {citations.map((citation, i) => {
+                              const isAudio = citation.mimeType.startsWith("audio/") || citation.mimeType.startsWith("video/");
+                              const isPdf = citation.mimeType === "application/pdf";
+                              const Icon = isAudio ? FileAudio : isPdf ? FileText : BookMarked;
+                              return (
+                                <div
+                                  key={`cite-${i}`}
+                                  className="group/cite flex items-start gap-2 rounded-lg border border-brand-200 bg-brand-50/50 p-2 transition-all hover:border-brand-400 hover:bg-brand-50 dark:border-brand-800 dark:bg-brand-950/20 dark:hover:bg-brand-950/40"
+                                >
+                                  <button
+                                    onClick={() =>
+                                      window.open(
+                                        `/api/download?url=${encodeURIComponent(citation.blobUrl)}`,
+                                        "_blank"
+                                      )
+                                    }
+                                    className="flex w-full items-start gap-2 text-left"
+                                    title={`Open ${citation.filename}`}
+                                  >
+                                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
+                                      <Icon className="h-3.5 w-3.5" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="rounded bg-brand-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                          {i + 1}
+                                        </span>
+                                        <span className="truncate text-xs font-semibold text-brand-700 dark:text-brand-300">
+                                          {citation.label}
+                                        </span>
+                                      </div>
+                                      <p className="mt-1 line-clamp-2 text-[11px] italic text-muted-foreground">
+                                        &ldquo;{citation.quote}&rdquo;
+                                      </p>
+                                      <span className="mt-0.5 block text-[10px] text-brand-600 opacity-0 transition-opacity group-hover/cite:opacity-100">
+                                        Click to open source →
+                                      </span>
+                                    </div>
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
 
                     {/* Streaming indicator */}
                     {isLoading &&

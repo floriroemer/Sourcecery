@@ -7,6 +7,7 @@ import {
   vector,
   index,
   jsonb,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -181,6 +182,8 @@ export const notes = pgTable(
       .references(() => notebooks.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     content: text("content").notNull(),
+    // When true, this note has been converted into a source (text file in blob storage)
+    isSource: boolean("is_source").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
