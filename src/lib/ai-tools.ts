@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import { fetchPrivateBlob } from "@/lib/blob";
 import { parsePdfSync } from "@/lib/runpod";
+import { supportsPdfInput } from "@/lib/model-registry";
 
 /**
  * AI Tools for the Sourcecery agentic chat.
@@ -69,9 +70,12 @@ async function verifyNotebookOwnership(
  * Create the full set of AI tools for a given notebook + user context.
  * Each tool closure captures notebookId and userId for security.
  */
-export function createChatTools(notebookId: string, userId: string) {
+export function createChatTools(notebookId: string, userId: string, modelId: string) {
   // Track the last shown GIF so we never repeat twice in a row
   let lastGif: string | null = null;
+
+  // Check if the current model supports direct PDF input
+  const modelSupportsPdf = supportsPdfInput(modelId);
 
   return {
     // ──────────────────────────────────────────────────────────────
@@ -248,6 +252,83 @@ export function createChatTools(notebookId: string, userId: string) {
           sourceId,
           text: "",
           error: `Cannot read files of type ${source.mimeType}. Only text files and PDFs are supported.`,
+        };
+      },
+    }),
+
+    // ──────────────────────────────────────────────────────────────
+    // 2b. READ SOURCE FILE — pass file directly to the model (for PDF-capable models)
+    // ──────────────────────────────────────────────────────────────
+    readSourceFile: tool({
+      description:
+        "Read a source file directly as a file attachment (PDF). " +
+        "Use this instead of readSourceText when you need to see the actual PDF " +
+        "with its layout, images, tables, and charts — not just extracted text. " +
+        "Only works if the current model supports direct PDF input. " +
+        "If the model doesn't support PDFs, use readSourceText instead (which uses docling).",
+      inputSchema: z.object({
+        sourceId: z.string().uuid().describe("The ID of the source to read"),
+      }),
+      execute: async ({ sourceId }) => {
+        await verifySourceOwnership(sourceId, userId);
+
+        // Check if the current model supports PDF input
+        if (!modelSupportsPdf) {
+          return {
+            error:
+              `The current model (${modelId}) does not support direct PDF input. ` +
+              "Use readSourceText instead, which extracts text via the docling parser.",
+          };
+        }
+
+        const [source] = await db
+          .select()
+          .from(sources)
+          .where(eq(sources.id, sourceId))
+          .limit(1);
+
+        if (!source) throw new Error("Source not found");
+
+        // Only PDFs are supported for direct file input
+        if (source.mimeType !== "application/pdf") {
+          return {
+            error:
+              "Direct file input is only supported for PDFs. " +
+              "For text files, use readSourceText.",
+          };
+        }
+
+        // Fetch the PDF from blob storage
+        const blob = await fetchPrivateBlob(source.blobUrl);
+        if (!blob) throw new Error("Failed to fetch PDF from storage");
+
+        // Read all bytes and convert to base64 data URL
+        const reader = blob.stream.getReader();
+        const chunks: Uint8Array[] = [];
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) chunks.push(value);
+        }
+        const bytes = new Uint8Array(
+          chunks.reduce((acc, c) => acc + c.length, 0)
+        );
+        let offset = 0;
+        for (const c of chunks) {
+          bytes.set(c, offset);
+          offset += c.length;
+        }
+        const base64 = Buffer.from(bytes).toString("base64");
+        const dataUrl = `data:application/pdf;base64,${base64}`;
+
+        return {
+          sourceId,
+          filename: source.filename,
+          mimeType: "application/pdf",
+          dataUrl,
+          sizeBytes: bytes.length,
+          note: "The PDF has been attached. You can now see its full content including layout, images, and tables.",
         };
       },
     }),

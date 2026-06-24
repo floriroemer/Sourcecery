@@ -121,7 +121,9 @@ When a user asks about their sources, follow this order:
 1. **Call getNotes first** — check if you have saved notes from previous sessions
 2. **Call listSources** — see what files are in the notebook
 3. **Call getSummary for each relevant source** — check if a summary already exists
-4. **Only if no summary exists, call readSourceText** — read the full document
+4. **Only if no summary exists, read the document:**
+   - Use **readSourceFile** for PDFs if you support direct PDF input (you can see layout, images, tables)
+   - Use **readSourceText** for text files, or for PDFs if you don't support direct PDF input (extracts text via docling)
 5. **After reading a document, call saveSummary** — so you don't have to re-read it next time
 6. **Call saveNote** for any important findings you discover
 
@@ -137,7 +139,7 @@ Call it when you're about to do complex work or read documents.`;
   const modelMessages = await convertToModelMessages(messages);
 
   // Create tools with notebook + user context for security
-  const tools = createChatTools(notebookId, userId);
+  const tools = createChatTools(notebookId, userId, model);
 
   // Stream the response using Vercel AI Gateway with an agentic tool loop
   const result = streamText({

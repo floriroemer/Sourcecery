@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { getModelById } from "@/lib/models";
 import { Markdown } from "@/components/markdown";
 import {
   createConversation,
@@ -39,28 +38,15 @@ export function ChatPanel({
   initialMessages,
 }: {
   notebookId: string;
-  enabledModels: string[];
+  enabledModels: { id: string; label: string; provider: string }[];
   conversations: ConversationSummary[];
   activeConversationId: string;
   initialMessages: UIMessage[];
 }) {
   const router = useRouter();
 
-  // Build the model list from the user's enabled models
-  const models = useMemo(
-    () =>
-      enabledModels
-        .map((id) => {
-          const opt = getModelById(id);
-          return opt
-            ? { id: opt.id, label: opt.label, provider: opt.provider }
-            : null;
-        })
-        .filter((m): m is { id: string; label: string; provider: string } =>
-          m !== null
-        ),
-    [enabledModels]
-  );
+  // Models are already built from the server (gateway model info)
+  const models = enabledModels;
 
   const [model, setModel] = useState<string>(models[0]?.id ?? "");
   const [modelMenuOpen, setModelMenuOpen] = useState(false);

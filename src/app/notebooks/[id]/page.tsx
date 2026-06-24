@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getNotebookWithSources } from "@/app/actions/notebooks";
-import { getEnabledModels } from "@/app/actions/settings";
+import { getEnabledModels, getAvailableModels } from "@/app/actions/settings";
 import {
   getConversations,
   createConversationRender,
@@ -30,7 +30,17 @@ export default async function NotebookPage({
 
   const { notebook, sources } = data;
   const enabledModels = await getEnabledModels();
+  const allGatewayModels = await getAvailableModels();
   const conversations = await getConversations(notebook.id);
+
+  // Build model info for the enabled models (label, provider from gateway)
+  const enabledModelInfos = enabledModels
+    .map((id) => {
+      const gm = allGatewayModels.find((m) => m.id === id);
+      return gm
+        ? { id: gm.id, label: gm.name, provider: gm.provider }
+        : { id, label: id, provider: "unknown" };
+    });
 
   // Determine the active conversation
   let activeConversationId = conversationIdParam ?? conversations[0]?.id ?? "";
@@ -89,7 +99,7 @@ export default async function NotebookPage({
         <div className="flex-1 overflow-hidden">
           <ChatPanel
             notebookId={notebook.id}
-            enabledModels={enabledModels}
+            enabledModels={enabledModelInfos}
             conversations={conversations.map((c) => ({
               id: c.id,
               title: c.title,
