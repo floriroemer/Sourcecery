@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import type { UIMessage } from "ai";
 import { getNotebookWithSources } from "@/app/actions/notebooks";
 import { getEnabledModels, getAvailableModels } from "@/app/actions/settings";
 import {
@@ -54,14 +55,14 @@ export default async function NotebookPage({
   }
 
   // Load messages for the active conversation
-  let initialMessages: { id: string; role: "user" | "assistant"; parts: { type: "text"; text: string }[] }[] = [];
+  let initialMessages: UIMessage[] = [];
   if (activeConversationId) {
     const convoData = await getConversationWithMessages(
       activeConversationId,
       notebook.id
     );
     if (convoData) {
-      initialMessages = convoData.messages;
+      initialMessages = convoData.messages as UIMessage[];
     }
   }
 

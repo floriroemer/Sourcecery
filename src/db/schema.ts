@@ -12,6 +12,19 @@ import {
 import { relations } from "drizzle-orm";
 
 /**
+ * Citation data stored with chat messages.
+ * Populated when the AI calls the citeSource tool.
+ */
+export interface Citation {
+  sourceId: string;
+  filename: string;
+  mimeType: string;
+  blobUrl: string;
+  quote: string;
+  label: string;
+}
+
+/**
  * Users — synced from Clerk via webhook.
  * The Clerk user ID is the source of truth; this table holds app-specific data.
  */
@@ -258,6 +271,8 @@ export const chatMessages = pgTable(
       .references(() => conversations.id, { onDelete: "cascade" }),
     role: text("role").notNull(), // "user" | "assistant"
     content: text("content").notNull(),
+    // JSON array of citations: [{ sourceId, filename, mimeType, blobUrl, quote, label }]
+    citations: jsonb("citations").$type<Citation[]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({

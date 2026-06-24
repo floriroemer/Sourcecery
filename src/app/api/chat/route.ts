@@ -2,6 +2,7 @@ import { streamText, stepCountIs, convertToModelMessages } from "ai";
 import { gateway } from "@ai-sdk/gateway";
 import { db } from "@/db";
 import { chatMessages, conversations, notebooks, users } from "@/db/schema";
+import type { Citation } from "@/db/schema";
 import { getCurrentUserId } from "@/lib/auth";
 import { eq, and } from "drizzle-orm";
 import { DEFAULT_ENABLED_MODELS } from "@/lib/models";
@@ -225,13 +226,34 @@ Call it when you're about to do complex work or read documents.`;
         );
       }
     },
-    onFinish: async ({ text }) => {
-      // Save assistant response to DB after streaming completes
+    onFinish: async ({ text, steps }) => {
+      // Extract citations from tool results across all steps
+      const citations: Citation[] = [];
+      for (const step of steps) {
+        for (const toolResult of step.toolResults) {
+          if (toolResult.toolName === "citeSource" && toolResult.output) {
+            const out = toolResult.output as Citation;
+            if (out.sourceId && out.filename) {
+              citations.push({
+                sourceId: out.sourceId,
+                filename: out.filename,
+                mimeType: out.mimeType,
+                blobUrl: out.blobUrl,
+                quote: out.quote,
+                label: out.label,
+              });
+            }
+          }
+        }
+      }
+
+      // Save assistant response to DB with citations
       if (text.trim()) {
         await db.insert(chatMessages).values({
           conversationId,
           role: "assistant",
           content: text,
+          citations: citations.length > 0 ? citations : null,
         });
         // Update conversation timestamp
         await db

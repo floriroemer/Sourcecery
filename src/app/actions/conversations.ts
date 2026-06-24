@@ -122,11 +122,31 @@ export async function getConversationWithMessages(
     .orderBy(chatMessages.createdAt);
 
   // Convert to UIMessage format for useChat
-  const uiMessages = messages.map((msg) => ({
-    id: msg.id,
-    role: msg.role as "user" | "assistant",
-    parts: [{ type: "text" as const, text: msg.content }],
-  }));
+  // Restore citations as tool-citeSource parts so the chat panel can render them
+  const uiMessages = messages.map((msg) => {
+    const parts: Array<any> = [{ type: "text" as const, text: msg.content }];
+
+    // Restore citations as completed tool parts
+    if (msg.citations && msg.citations.length > 0) {
+      for (let ci = 0; ci < msg.citations.length; ci++) {
+        const citation = msg.citations[ci];
+        // Keep toolCallId under 64 chars (API limit)
+        const toolCallId = `cit-${msg.id.slice(0, 8)}-${ci}`;
+        parts.push({
+          type: "tool-citeSource",
+          state: "output-available",
+          toolCallId,
+          output: citation,
+        });
+      }
+    }
+
+    return {
+      id: msg.id,
+      role: msg.role as "user" | "assistant",
+      parts,
+    };
+  });
 
   return {
     conversation: conversation.conversations,
